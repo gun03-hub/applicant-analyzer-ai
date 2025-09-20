@@ -24,10 +24,17 @@ export const Header = () => {
         </nav>
 
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" className="hidden md:inline-flex">
+          <Button 
+            variant="ghost" 
+            className="hidden md:inline-flex"
+            onClick={() => alert("Sign In functionality coming soon!")}
+          >
             Sign In
           </Button>
-          <Button variant="corporate">
+          <Button 
+            variant="corporate"
+            onClick={() => document.getElementById('upload-section')?.scrollIntoView({ behavior: 'smooth' })}
+          >
             Get Started
           </Button>
         </div>

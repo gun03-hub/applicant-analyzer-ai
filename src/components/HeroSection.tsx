@@ -31,10 +31,20 @@ export const HeroSection = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="lg" className="text-lg px-8 py-6">
+              <Button 
+                variant="hero" 
+                size="lg" 
+                className="text-lg px-8 py-6"
+                onClick={() => document.getElementById('upload-section')?.scrollIntoView({ behavior: 'smooth' })}
+              >
                 Start Matching Resumes
               </Button>
-              <Button variant="outline-corporate" size="lg" className="text-lg px-8 py-6">
+              <Button 
+                variant="outline-corporate" 
+                size="lg" 
+                className="text-lg px-8 py-6"
+                onClick={() => alert("Demo video coming soon!")}
+              >
                 Watch Demo
               </Button>
             </div>

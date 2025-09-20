@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Upload, FileText, Briefcase, Sparkles } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 export const UploadSection = () => {
   const [jobDescription, setJobDescription] = useState<File | null>(null);
@@ -48,7 +48,7 @@ export const UploadSection = () => {
   };
 
   return (
-    <section className="py-20 bg-background">
+    <section id="upload-section" className="py-20 bg-background">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-foreground mb-4">
