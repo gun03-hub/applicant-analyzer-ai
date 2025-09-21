@@ -2,6 +2,7 @@ import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { UploadSection } from "@/components/UploadSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
+import { PricingSection } from "@/components/PricingSection";
 
 const Index = () => {
   return (
@@ -10,6 +11,7 @@ const Index = () => {
       <HeroSection />
       <UploadSection />
       <FeaturesSection />
+      <PricingSection />
     </div>
   );
 };
