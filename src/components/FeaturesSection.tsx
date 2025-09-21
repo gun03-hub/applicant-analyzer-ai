@@ -78,11 +78,11 @@ export const FeaturesSection = () => {
         </div>
 
         {/* Process Flow */}
-        <div className="mt-20">
+        <div id="how-it-works" className="mt-20">
           <h3 className="text-2xl font-bold text-center text-foreground mb-12">
             How It Works
           </h3>
-          
+
           <div className="grid md:grid-cols-4 gap-8">
             {[
               { step: "01", title: "Upload JD", desc: "Paste or upload your job description" },
