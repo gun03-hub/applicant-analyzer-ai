@@ -56,9 +56,7 @@ export const PricingSection = () => {
                   ))}
                 </ul>
                 <div className="mt-auto">
-                  <Link to={t.cta === 'Contact Sales' ? '/contact-sales' : t.name === 'Pro' ? '/sign-up?plan=pro' : '/sign-up?plan=starter'}>
-                    <Button variant={t.highlight ? 'hero' : 'outline'} className="w-full">{t.cta}</Button>
-                  </Link>
+                  <PlanButton tier={t} />
                 </div>
               </div>
             </Card>
