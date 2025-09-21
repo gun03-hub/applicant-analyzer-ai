@@ -4,12 +4,15 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, FileText, Briefcase, Sparkles, Type, FileUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 export const UploadSection = () => {
   const [jobDescription, setJobDescription] = useState<File | null>(null);
   const [jobDescriptionText, setJobDescriptionText] = useState("");
   const [jdInputMode, setJdInputMode] = useState<'file' | 'text'>('file');
   const [resume, setResume] = useState<File | null>(null);
+  const [resumeText, setResumeText] = useState("");
+  const [resumeInputMode, setResumeInputMode] = useState<'file' | 'text'>('file');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
@@ -32,10 +35,12 @@ export const UploadSection = () => {
 
   const handleAnalyze = async () => {
     const hasJobDescription = jobDescription || jobDescriptionText.trim();
-    if (!hasJobDescription || !resume) {
+    const hasResume = resume || resumeText.trim();
+    
+    if (!hasJobDescription || !hasResume) {
       toast({
         title: "Missing Information",
-        description: "Please provide both a job description and upload a resume to analyze.",
+        description: "Please provide both a job description and resume content to analyze.",
         variant: "destructive",
       });
       return;
@@ -44,31 +49,54 @@ export const UploadSection = () => {
     setIsAnalyzing(true);
     
     try {
-      // For now, simulate AI analysis
-      // TODO: Replace with actual AI API call when backend is connected
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock results
-      const mockResults = {
-        relevanceScore: Math.floor(Math.random() * 30) + 70, // 70-100
-        matchedSkills: ["React", "TypeScript", "Node.js", "Python"],
-        missingSkills: ["Machine Learning", "AWS", "Docker"],
-        recommendations: [
-          "Add more specific project examples",
-          "Include quantifiable achievements",
-          "Highlight relevant certifications"
-        ]
-      };
-      
-      setResults(mockResults);
+      // Get job description text
+      let jdText = jobDescriptionText.trim();
+      if (!jdText && jobDescription) {
+        // For file uploads, we'll need to handle file reading
+        // For now, prompt user to use text input for better results
+        toast({
+          title: "File Upload Not Yet Supported",
+          description: "Please use the text input option for job descriptions for AI analysis.",
+          variant: "destructive",
+        });
+        setIsAnalyzing(false);
+        return;
+      }
+
+      // Get resume text
+      let resumeContent = resumeText.trim();
+      if (!resumeContent && resume) {
+        toast({
+          title: "File Upload Not Yet Supported", 
+          description: "Please use the text input option for resumes for AI analysis.",
+          variant: "destructive",
+        });
+        setIsAnalyzing(false);
+        return;
+      }
+
+      // Call the AI analysis function
+      const { data, error } = await supabase.functions.invoke('analyze-resume', {
+        body: {
+          jobDescription: jdText,
+          resumeText: resumeContent
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setResults(data);
       toast({
         title: "Analysis Complete!",
-        description: `Match score: ${mockResults.relevanceScore}%. View detailed results below.`,
+        description: `Match score: ${data.relevanceScore}%. View detailed results below.`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Analysis error:', error);
       toast({
         title: "Analysis Failed",
-        description: "There was an error analyzing your resume. Please try again.",
+        description: error.message || "There was an error analyzing your resume. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -178,30 +206,76 @@ export const UploadSection = () => {
                 <FileText className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-foreground">Resume/CV</h3>
-              <p className="text-muted-foreground">Upload the candidate's resume for analysis</p>
+              <p className="text-muted-foreground">Upload file or paste resume content</p>
               
-              {resume ? (
-                <div className="flex items-center justify-center space-x-2 text-secondary">
-                  <FileText className="w-4 h-4" />
-                  <span className="font-medium">{resume.name}</span>
-                </div>
-              ) : (
-                <div>
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.txt"
-                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'resume')}
-                    className="hidden"
-                    id="resume-upload"
-                  />
-                  <label htmlFor="resume-upload">
-                    <Button variant="orange" className="cursor-pointer" asChild>
-                      <span>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Upload Resume
-                      </span>
+              {/* Toggle between file and text input */}
+              <div className="flex justify-center space-x-2 mb-4">
+                <Button
+                  variant={resumeInputMode === 'file' ? 'orange' : 'outline'}
+                  size="sm"
+                  onClick={() => setResumeInputMode('file')}
+                >
+                  <FileUp className="w-4 h-4 mr-2" />
+                  Upload File
+                </Button>
+                <Button
+                  variant={resumeInputMode === 'text' ? 'orange' : 'outline'}
+                  size="sm"
+                  onClick={() => setResumeInputMode('text')}
+                >
+                  <Type className="w-4 h-4 mr-2" />
+                  Paste Text
+                </Button>
+              </div>
+
+              {resumeInputMode === 'file' ? (
+                resume ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-center space-x-2 text-secondary">
+                      <FileText className="w-4 h-4" />
+                      <span className="font-medium">{resume.name}</span>
+                    </div>
+                    <Button
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setResume(null)}
+                      className="text-muted-foreground hover:text-secondary"
+                    >
+                      Remove file
                     </Button>
-                  </label>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt"
+                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'resume')}
+                      className="hidden"
+                      id="resume-upload"
+                    />
+                    <label htmlFor="resume-upload">
+                      <Button variant="orange" className="cursor-pointer" asChild>
+                        <span>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Resume
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
+                )
+              ) : (
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Paste or type the resume content here..."
+                    value={resumeText}
+                    onChange={(e) => setResumeText(e.target.value)}
+                    className="min-h-[120px] resize-none"
+                  />
+                  {resumeText && (
+                    <p className="text-sm text-muted-foreground">
+                      {resumeText.length} characters
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -215,7 +289,7 @@ export const UploadSection = () => {
             size="lg" 
             className="text-lg px-12 py-6"
             onClick={handleAnalyze}
-            disabled={isAnalyzing || (!jobDescription && !jobDescriptionText.trim()) || !resume}
+            disabled={isAnalyzing || (!jobDescription && !jobDescriptionText.trim()) || (!resume && !resumeText.trim())}
           >
             {isAnalyzing ? (
               <>
