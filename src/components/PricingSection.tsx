@@ -30,6 +30,39 @@ const tiers = [
   },
 ];
 
+function PlanButton({ tier }: { tier: { name: string; cta: string; highlight: boolean } }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const onClick = () => {
+    if (tier.cta === "Contact Sales") {
+      navigate("/contact-sales");
+      return;
+    }
+    if (tier.name === "Pro") {
+      if (user) {
+        const name = encodeURIComponent(user.name);
+        const email = encodeURIComponent(user.email);
+        navigate(`/pay?plan=pro&amount=3900&name=${name}&email=${email}`);
+      } else {
+        navigate("/sign-up?plan=pro");
+      }
+    } else {
+      if (user) {
+        navigate("/");
+      } else {
+        navigate("/sign-up?plan=starter");
+      }
+    }
+  };
+
+  return (
+    <Button variant={tier.highlight ? "hero" : "outline"} className="w-full" onClick={onClick}>
+      {tier.cta}
+    </Button>
+  );
+}
+
 export const PricingSection = () => {
   return (
     <section id="pricing" className="py-20">
