@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const tiers = [
   {
@@ -54,7 +55,9 @@ export const PricingSection = () => {
                   ))}
                 </ul>
                 <div className="mt-auto">
-                  <Button variant={t.highlight ? 'hero' : 'outline'} className="w-full">{t.cta}</Button>
+                  <Link to={t.cta === 'Contact Sales' ? '/contact-sales' : t.name === 'Pro' ? '/sign-up?plan=pro' : '/sign-up?plan=starter'}>
+                    <Button variant={t.highlight ? 'hero' : 'outline'} className="w-full">{t.cta}</Button>
+                  </Link>
                 </div>
               </div>
             </Card>
