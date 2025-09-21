@@ -1,21 +1,39 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Upload, FileText, Briefcase, Sparkles, Type, FileUp } from "lucide-react";
+import { Upload, FileText, Briefcase, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 export const UploadSection = () => {
   const [jobDescription, setJobDescription] = useState<File | null>(null);
-  const [jobDescriptionText, setJobDescriptionText] = useState("");
-  const [jdInputMode, setJdInputMode] = useState<'file' | 'text'>('file');
   const [resume, setResume] = useState<File | null>(null);
-  const [resumeText, setResumeText] = useState("");
-  const [resumeInputMode, setResumeInputMode] = useState<'file' | 'text'>('file');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
+
+  const extractTextFromFile = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (file.type === 'text/plain') {
+          resolve(text);
+        } else {
+          // For other file types, we'll need the user to copy-paste for now
+          // In a real implementation, you'd use PDF.js, mammoth.js, etc.
+          reject(new Error(`File type ${file.type} requires server-side processing. Please save as .txt file and upload again.`));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      
+      if (file.type === 'text/plain') {
+        reader.readAsText(file);
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
+    });
+  };
 
   const handleFileUpload = (file: File, type: 'jd' | 'resume') => {
     if (type === 'jd') {
@@ -34,13 +52,10 @@ export const UploadSection = () => {
   };
 
   const handleAnalyze = async () => {
-    const hasJobDescription = jobDescription || jobDescriptionText.trim();
-    const hasResume = resume || resumeText.trim();
-    
-    if (!hasJobDescription || !hasResume) {
+    if (!jobDescription || !resume) {
       toast({
-        title: "Missing Information",
-        description: "Please provide both a job description and resume content to analyze.",
+        title: "Missing Files",
+        description: "Please upload both a job description and resume to analyze.",
         variant: "destructive",
       });
       return;
@@ -49,37 +64,17 @@ export const UploadSection = () => {
     setIsAnalyzing(true);
     
     try {
-      // Get job description text
-      let jdText = jobDescriptionText.trim();
-      if (!jdText && jobDescription) {
-        // For file uploads, we'll need to handle file reading
-        // For now, prompt user to use text input for better results
-        toast({
-          title: "File Upload Not Yet Supported",
-          description: "Please use the text input option for job descriptions for AI analysis.",
-          variant: "destructive",
-        });
-        setIsAnalyzing(false);
-        return;
-      }
-
-      // Get resume text
-      let resumeContent = resumeText.trim();
-      if (!resumeContent && resume) {
-        toast({
-          title: "File Upload Not Yet Supported", 
-          description: "Please use the text input option for resumes for AI analysis.",
-          variant: "destructive",
-        });
-        setIsAnalyzing(false);
-        return;
-      }
+      // Extract text from uploaded files
+      const [jdText, resumeText] = await Promise.all([
+        extractTextFromFile(jobDescription),
+        extractTextFromFile(resume)
+      ]);
 
       // Call the AI analysis function
       const { data, error } = await supabase.functions.invoke('analyze-resume', {
         body: {
           jobDescription: jdText,
-          resumeText: resumeContent
+          resumeText: resumeText
         }
       });
 
@@ -96,7 +91,7 @@ export const UploadSection = () => {
       console.error('Analysis error:', error);
       toast({
         title: "Analysis Failed",
-        description: error.message || "There was an error analyzing your resume. Please try again.",
+        description: error.message || "There was an error analyzing your files. Please try again with .txt files.",
         variant: "destructive",
       });
     } finally {
@@ -124,76 +119,40 @@ export const UploadSection = () => {
                 <Briefcase className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-foreground">Job Description</h3>
-              <p className="text-muted-foreground">Upload file or paste job description text</p>
+              <p className="text-muted-foreground">Upload job description file (.txt format recommended)</p>
               
-              {/* Toggle between file and text input */}
-              <div className="flex justify-center space-x-2 mb-4">
-                <Button
-                  variant={jdInputMode === 'file' ? 'corporate' : 'outline'}
-                  size="sm"
-                  onClick={() => setJdInputMode('file')}
-                >
-                  <FileUp className="w-4 h-4 mr-2" />
-                  Upload File
-                </Button>
-                <Button
-                  variant={jdInputMode === 'text' ? 'corporate' : 'outline'}
-                  size="sm"
-                  onClick={() => setJdInputMode('text')}
-                >
-                  <Type className="w-4 h-4 mr-2" />
-                  Paste Text
-                </Button>
-              </div>
-
-              {jdInputMode === 'file' ? (
-                jobDescription ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-center space-x-2 text-primary">
-                      <FileText className="w-4 h-4" />
-                      <span className="font-medium">{jobDescription.name}</span>
-                    </div>
-                    <Button
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setJobDescription(null)}
-                      className="text-muted-foreground hover:text-primary"
-                    >
-                      Remove file
-                    </Button>
-                  </div>
-                ) : (
-                  <div>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.txt"
-                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'jd')}
-                      className="hidden"
-                      id="jd-upload"
-                    />
-                    <label htmlFor="jd-upload">
-                      <Button variant="corporate" className="cursor-pointer" asChild>
-                        <span>
-                          <Upload className="w-4 h-4 mr-2" />
-                          Upload Job Description
-                        </span>
-                      </Button>
-                    </label>
-                  </div>
-                )
-              ) : (
+              {jobDescription ? (
                 <div className="space-y-2">
-                  <Textarea
-                    placeholder="Paste or type the job description here..."
-                    value={jobDescriptionText}
-                    onChange={(e) => setJobDescriptionText(e.target.value)}
-                    className="min-h-[120px] resize-none"
+                  <div className="flex items-center justify-center space-x-2 text-primary">
+                    <FileText className="w-4 h-4" />
+                    <span className="font-medium">{jobDescription.name}</span>
+                  </div>
+                  <Button
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setJobDescription(null)}
+                    className="text-muted-foreground hover:text-primary"
+                  >
+                    Remove file
+                  </Button>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="file"
+                    accept=".txt,.pdf,.doc,.docx"
+                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'jd')}
+                    className="hidden"
+                    id="jd-upload"
                   />
-                  {jobDescriptionText && (
-                    <p className="text-sm text-muted-foreground">
-                      {jobDescriptionText.length} characters
-                    </p>
-                  )}
+                  <label htmlFor="jd-upload">
+                    <Button variant="corporate" className="cursor-pointer" asChild>
+                      <span>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Job Description
+                      </span>
+                    </Button>
+                  </label>
                 </div>
               )}
             </div>
@@ -206,76 +165,40 @@ export const UploadSection = () => {
                 <FileText className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-foreground">Resume/CV</h3>
-              <p className="text-muted-foreground">Upload file or paste resume content</p>
+              <p className="text-muted-foreground">Upload resume file (.txt format recommended)</p>
               
-              {/* Toggle between file and text input */}
-              <div className="flex justify-center space-x-2 mb-4">
-                <Button
-                  variant={resumeInputMode === 'file' ? 'orange' : 'outline'}
-                  size="sm"
-                  onClick={() => setResumeInputMode('file')}
-                >
-                  <FileUp className="w-4 h-4 mr-2" />
-                  Upload File
-                </Button>
-                <Button
-                  variant={resumeInputMode === 'text' ? 'orange' : 'outline'}
-                  size="sm"
-                  onClick={() => setResumeInputMode('text')}
-                >
-                  <Type className="w-4 h-4 mr-2" />
-                  Paste Text
-                </Button>
-              </div>
-
-              {resumeInputMode === 'file' ? (
-                resume ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-center space-x-2 text-secondary">
-                      <FileText className="w-4 h-4" />
-                      <span className="font-medium">{resume.name}</span>
-                    </div>
-                    <Button
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setResume(null)}
-                      className="text-muted-foreground hover:text-secondary"
-                    >
-                      Remove file
-                    </Button>
-                  </div>
-                ) : (
-                  <div>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.txt"
-                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'resume')}
-                      className="hidden"
-                      id="resume-upload"
-                    />
-                    <label htmlFor="resume-upload">
-                      <Button variant="orange" className="cursor-pointer" asChild>
-                        <span>
-                          <Upload className="w-4 h-4 mr-2" />
-                          Upload Resume
-                        </span>
-                      </Button>
-                    </label>
-                  </div>
-                )
-              ) : (
+              {resume ? (
                 <div className="space-y-2">
-                  <Textarea
-                    placeholder="Paste or type the resume content here..."
-                    value={resumeText}
-                    onChange={(e) => setResumeText(e.target.value)}
-                    className="min-h-[120px] resize-none"
+                  <div className="flex items-center justify-center space-x-2 text-secondary">
+                    <FileText className="w-4 h-4" />
+                    <span className="font-medium">{resume.name}</span>
+                  </div>
+                  <Button
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setResume(null)}
+                    className="text-muted-foreground hover:text-secondary"
+                  >
+                    Remove file
+                  </Button>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="file"
+                    accept=".txt,.pdf,.doc,.docx"
+                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'resume')}
+                    className="hidden"
+                    id="resume-upload"
                   />
-                  {resumeText && (
-                    <p className="text-sm text-muted-foreground">
-                      {resumeText.length} characters
-                    </p>
-                  )}
+                  <label htmlFor="resume-upload">
+                    <Button variant="orange" className="cursor-pointer" asChild>
+                      <span>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Resume
+                      </span>
+                    </Button>
+                  </label>
                 </div>
               )}
             </div>
@@ -289,7 +212,7 @@ export const UploadSection = () => {
             size="lg" 
             className="text-lg px-12 py-6"
             onClick={handleAnalyze}
-            disabled={isAnalyzing || (!jobDescription && !jobDescriptionText.trim()) || (!resume && !resumeText.trim())}
+            disabled={isAnalyzing || !jobDescription || !resume}
           >
             {isAnalyzing ? (
               <>
