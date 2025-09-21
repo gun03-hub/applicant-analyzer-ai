@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Upload, FileText, Briefcase, Sparkles } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Upload, FileText, Briefcase, Sparkles, Copy, ClipboardPaste } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 export const UploadSection = () => {
   const [jobDescription, setJobDescription] = useState<File | null>(null);
   const [resume, setResume] = useState<File | null>(null);
+  const [jobDescriptionText, setJobDescriptionText] = useState("");
+  const [resumeText, setResumeText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
@@ -20,13 +24,11 @@ export const UploadSection = () => {
         if (file.type === 'text/plain') {
           resolve(text);
         } else {
-          // For other file types, we'll need the user to copy-paste for now
-          // In a real implementation, you'd use PDF.js, mammoth.js, etc.
           reject(new Error(`File type ${file.type} requires server-side processing. Please save as .txt file and upload again.`));
         }
       };
       reader.onerror = () => reject(new Error('Failed to read file'));
-      
+
       if (file.type === 'text/plain') {
         reader.readAsText(file);
       } else {
@@ -45,37 +47,63 @@ export const UploadSection = () => {
     } else {
       setResume(file);
       toast({
-        title: "Resume Uploaded", 
+        title: "Resume Uploaded",
         description: `${file.name} has been uploaded successfully.`,
       });
     }
   };
 
-  const handleAnalyze = async () => {
-    if (!jobDescription || !resume) {
-      toast({
-        title: "Missing Files",
-        description: "Please upload both a job description and resume to analyze.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsAnalyzing(true);
-    
+  const pasteFromClipboard = async (setter: (v: string) => void, label: string) => {
     try {
-      // Extract text from uploaded files
-      const [jdText, resumeText] = await Promise.all([
-        extractTextFromFile(jobDescription),
-        extractTextFromFile(resume)
-      ]);
+      const text = await navigator.clipboard.readText();
+      setter(text);
+      toast({ title: "Pasted from clipboard", description: `${label} text added.` });
+    } catch (err: any) {
+      toast({ title: "Paste failed", description: err.message || "Permission denied for clipboard.", variant: "destructive" });
+    }
+  };
 
-      // Call the AI analysis function
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copied", description: `${label} copied to clipboard.` });
+    } catch (err: any) {
+      toast({ title: "Copy failed", description: err.message || "Unable to copy to clipboard.", variant: "destructive" });
+    }
+  };
+
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+
+    try {
+      let jdTextFinal = jobDescriptionText.trim();
+      let resumeTextFinal = resumeText.trim();
+
+      if (!jdTextFinal) {
+        if (jobDescription) {
+          jdTextFinal = await extractTextFromFile(jobDescription);
+        }
+      }
+      if (!resumeTextFinal) {
+        if (resume) {
+          resumeTextFinal = await extractTextFromFile(resume);
+        }
+      }
+
+      if (!jdTextFinal || !resumeTextFinal) {
+        toast({
+          title: "Missing input",
+          description: "Provide text or upload files for both job description and resume.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('analyze-resume', {
         body: {
-          jobDescription: jdText,
-          resumeText: resumeText
-        }
+          jobDescription: jdTextFinal,
+          resumeText: resumeTextFinal,
+        },
       });
 
       if (error) {
@@ -91,13 +119,15 @@ export const UploadSection = () => {
       console.error('Analysis error:', error);
       toast({
         title: "Analysis Failed",
-        description: error.message || "There was an error analyzing your files. Please try again with .txt files.",
+        description: error.message || "There was an error analyzing your input.",
         variant: "destructive",
       });
     } finally {
       setIsAnalyzing(false);
     }
   };
+
+  const canAnalyze = (jobDescriptionText.trim().length > 0 || !!jobDescription) && (resumeText.trim().length > 0 || !!resume);
 
   return (
     <section id="upload-section" className="py-20 bg-background">
@@ -107,112 +137,160 @@ export const UploadSection = () => {
             Upload & Analyze in <span className="text-secondary">Seconds</span>
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Upload your job description and resume to get instant relevance scoring and detailed feedback.
+            Paste or upload your job description and resume to get instant relevance scoring and detailed feedback.
           </p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8 max-w-4xl mx-auto mb-12">
-          {/* Job Description Upload */}
+          {/* Job Description */}
           <Card className="p-8 border-2 border-dashed border-primary/30 hover:border-primary/50 transition-colors group">
             <div className="text-center space-y-4">
               <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
                 <Briefcase className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-foreground">Job Description</h3>
-              <p className="text-muted-foreground">Upload job description file (.txt format recommended)</p>
-              
-              {jobDescription ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-center space-x-2 text-primary">
-                    <FileText className="w-4 h-4" />
-                    <span className="font-medium">{jobDescription.name}</span>
+              <Tabs defaultValue="upload" className="mt-2">
+                <TabsList className="mx-auto">
+                  <TabsTrigger value="upload">Upload</TabsTrigger>
+                  <TabsTrigger value="paste">Paste Text</TabsTrigger>
+                </TabsList>
+                <TabsContent value="upload">
+                  {jobDescription ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center space-x-2 text-primary">
+                        <FileText className="w-4 h-4" />
+                        <span className="font-medium">{jobDescription.name}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setJobDescription(null)}
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        Remove file
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="file"
+                        accept=".txt,.pdf,.doc,.docx"
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'jd')}
+                        className="hidden"
+                        id="jd-upload"
+                      />
+                      <label htmlFor="jd-upload">
+                        <Button variant="corporate" className="cursor-pointer" asChild>
+                          <span>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload Job Description
+                          </span>
+                        </Button>
+                      </label>
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="paste">
+                  <div className="space-y-3 text-left">
+                    <Textarea
+                      value={jobDescriptionText}
+                      onChange={(e) => setJobDescriptionText(e.target.value)}
+                      placeholder="Paste job description text here"
+                      className="min-h-[160px]"
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => pasteFromClipboard(setJobDescriptionText, 'Job description')}>
+                        <ClipboardPaste className="w-4 h-4" /> Paste
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => copyToClipboard(jobDescriptionText, 'Job description')} disabled={!jobDescriptionText.trim()}>
+                        <Copy className="w-4 h-4" /> Copy
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setJobDescription(null)}
-                    className="text-muted-foreground hover:text-primary"
-                  >
-                    Remove file
-                  </Button>
-                </div>
-              ) : (
-                <div>
-                  <input
-                    type="file"
-                    accept=".txt,.pdf,.doc,.docx"
-                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'jd')}
-                    className="hidden"
-                    id="jd-upload"
-                  />
-                  <label htmlFor="jd-upload">
-                    <Button variant="corporate" className="cursor-pointer" asChild>
-                      <span>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Upload Job Description
-                      </span>
-                    </Button>
-                  </label>
-                </div>
-              )}
+                </TabsContent>
+              </Tabs>
             </div>
           </Card>
 
-          {/* Resume Upload */}
+          {/* Resume */}
           <Card className="p-8 border-2 border-dashed border-secondary/30 hover:border-secondary/50 transition-colors group">
             <div className="text-center space-y-4">
               <div className="w-16 h-16 bg-gradient-secondary rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
                 <FileText className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-foreground">Resume/CV</h3>
-              <p className="text-muted-foreground">Upload resume file (.txt format recommended)</p>
-              
-              {resume ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-center space-x-2 text-secondary">
-                    <FileText className="w-4 h-4" />
-                    <span className="font-medium">{resume.name}</span>
+              <Tabs defaultValue="upload" className="mt-2">
+                <TabsList className="mx-auto">
+                  <TabsTrigger value="upload">Upload</TabsTrigger>
+                  <TabsTrigger value="paste">Paste Text</TabsTrigger>
+                </TabsList>
+                <TabsContent value="upload">
+                  {resume ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center space-x-2 text-secondary">
+                        <FileText className="w-4 h-4" />
+                        <span className="font-medium">{resume.name}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setResume(null)}
+                        className="text-muted-foreground hover:text-secondary"
+                      >
+                        Remove file
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="file"
+                        accept=".txt,.pdf,.doc,.docx"
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'resume')}
+                        className="hidden"
+                        id="resume-upload"
+                      />
+                      <label htmlFor="resume-upload">
+                        <Button variant="orange" className="cursor-pointer" asChild>
+                          <span>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload Resume
+                          </span>
+                        </Button>
+                      </label>
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="paste">
+                  <div className="space-y-3 text-left">
+                    <Textarea
+                      value={resumeText}
+                      onChange={(e) => setResumeText(e.target.value)}
+                      placeholder="Paste resume text here"
+                      className="min-h-[160px]"
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => pasteFromClipboard(setResumeText, 'Resume')}>
+                        <ClipboardPaste className="w-4 h-4" /> Paste
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => copyToClipboard(resumeText, 'Resume')} disabled={!resumeText.trim()}>
+                        <Copy className="w-4 h-4" /> Copy
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setResume(null)}
-                    className="text-muted-foreground hover:text-secondary"
-                  >
-                    Remove file
-                  </Button>
-                </div>
-              ) : (
-                <div>
-                  <input
-                    type="file"
-                    accept=".txt,.pdf,.doc,.docx"
-                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'resume')}
-                    className="hidden"
-                    id="resume-upload"
-                  />
-                  <label htmlFor="resume-upload">
-                    <Button variant="orange" className="cursor-pointer" asChild>
-                      <span>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Upload Resume
-                      </span>
-                    </Button>
-                  </label>
-                </div>
-              )}
+                </TabsContent>
+              </Tabs>
             </div>
           </Card>
         </div>
 
         {/* Analysis Button */}
         <div className="text-center">
-          <Button 
-            variant="hero" 
-            size="lg" 
+          <Button
+            variant="hero"
+            size="lg"
             className="text-lg px-12 py-6"
             onClick={handleAnalyze}
-            disabled={isAnalyzing || !jobDescription || !resume}
+            disabled={isAnalyzing || !canAnalyze}
           >
             {isAnalyzing ? (
               <>
@@ -237,7 +315,7 @@ export const UploadSection = () => {
                 <div className="text-4xl font-bold text-primary mb-2">{results.relevanceScore}%</div>
                 <p className="text-muted-foreground">Relevance Score</p>
               </div>
-              
+
               <div className="grid md:grid-cols-3 gap-6">
                 <div>
                   <h4 className="font-semibold text-foreground mb-3">Matched Skills</h4>
@@ -249,7 +327,7 @@ export const UploadSection = () => {
                     ))}
                   </div>
                 </div>
-                
+
                 <div>
                   <h4 className="font-semibold text-foreground mb-3">Missing Skills</h4>
                   <div className="space-y-2">
@@ -260,7 +338,7 @@ export const UploadSection = () => {
                     ))}
                   </div>
                 </div>
-                
+
                 <div>
                   <h4 className="font-semibold text-foreground mb-3">Recommendations</h4>
                   <div className="space-y-2">
