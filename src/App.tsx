@@ -10,6 +10,7 @@ import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import Pricing from "./pages/Pricing";
 import ContactSales from "./pages/ContactSales";
+import Pay from "./pages/Pay";
 
 const queryClient = new QueryClient();
 
